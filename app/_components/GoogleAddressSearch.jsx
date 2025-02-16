@@ -1,11 +1,28 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Map } from "lucide-react";
 import { mockLocations } from "@/lib/mockData"; // Import the mock data
+import { supabase } from "@/utils/supabase/client"; // Import Supabase client
 
 function GoogleAddressSearch({ selectedAddress, setCoordinates }) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
+  const [existingAddresses, setExistingAddresses] = useState([]);
+  console.log(query);
+  console.log(suggestions);
+  console.log(existingAddresses);
+
+  // Fetch existing addresses from the database
+  useEffect(() => {
+    const fetchExistingAddresses = async () => {
+      const { data, error } = await supabase.from("listing").select("address");
+      if (data) {
+        const addresses = data.map((item) => item.address); // Extract addresses from the database
+        setExistingAddresses(addresses);
+      }
+    };
+    fetchExistingAddresses();
+  }, []);
 
   // Handle input changes
   const handleInputChange = (e) => {
@@ -13,8 +30,10 @@ function GoogleAddressSearch({ selectedAddress, setCoordinates }) {
     setQuery(value);
 
     if (value) {
-      const filtered = mockLocations.filter((location) =>
-        location.label.toLowerCase().includes(value.toLowerCase())
+      const filtered = mockLocations.filter(
+        (location) =>
+          location.label.toLowerCase().includes(value.toLowerCase()) &&
+          !existingAddresses.includes(location.label) // Exclude already-inserted addresses
       );
       setSuggestions(filtered);
     } else {

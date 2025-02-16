@@ -20,7 +20,7 @@ function Header() {
     <div className="flex justify-between p-6 px-10 shadow-sm fixed top-0 w-full z-10 bg-white">
       <div className="flex gap-12 items-center">
         <Image src={"/logo.svg"} width={150} height={150} />
-        <ul className="hidden md:flex gap-10">
+        <ul className="hidden flex gap-10">
           <Link href={"/"}>
             <li
               className={`hover:text-[#1B3D5B] font-medium text-sm cursor-pointer ${
@@ -39,9 +39,11 @@ function Header() {
         </ul>
       </div>
       <div className="flex gap-2 items-center">
-        <Button className="flex gap-2">
-          <Plus className="h-5 w-5" /> Post Your Ad
-        </Button>
+        <Link href={"/add-new-listing"}>
+          <Button className="flex gap-2">
+            <Plus className="h-5 w-5" /> Post Your Ad
+          </Button>
+        </Link>
         {isSignedIn ? (
           <UserButton />
         ) : (

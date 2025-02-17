@@ -7,11 +7,13 @@ import { useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { Loader } from "lucide-react";
 import GoogleAddressSearch from "@/app/_components/GoogleAddressSearch";
+import { useRouter } from "next/navigation";
 
 const AddNewListingPage = () => {
   const [selectedAddress, setSelectedAddress] = useState();
   const [coordinates, setCoordinates] = useState();
   const [loader, setLoader] = useState(false);
+  const router = useRouter();
 
   const { user } = useUser();
 
@@ -34,6 +36,7 @@ const AddNewListingPage = () => {
       setLoader(false);
       console.log("New Data Added ", data);
       toast("Event has been created.");
+      router.replace("/edit-listing/" + data[0].id);
     }
   };
 

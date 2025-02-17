@@ -13,13 +13,15 @@ function Header() {
   const { user, isSignedIn } = useUser();
 
   useEffect(() => {
-    console.log(path);
+    // console.log(path);
   }, []);
 
   return (
     <div className="flex justify-between p-6 px-10 shadow-sm fixed top-0 w-full z-10 bg-white">
       <div className="flex gap-12 items-center">
-        <Image src={"/logo.svg"} width={150} height={150} />
+        <Link href={"/"}>
+          <Image src={"/logo.svg"} width={150} height={150} />
+        </Link>
         <ul className="hidden flex gap-10">
           <Link href={"/"}>
             <li

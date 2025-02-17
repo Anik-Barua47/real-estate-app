@@ -35,6 +35,7 @@ function GoogleAddressSearch({ selectedAddress, setCoordinates }) {
           location.label.toLowerCase().includes(value.toLowerCase()) &&
           !existingAddresses.includes(location.label) // Exclude already-inserted addresses
       );
+      // console.log(existingAddresses.includes(location.label));
       setSuggestions(filtered);
     } else {
       setSuggestions([]);

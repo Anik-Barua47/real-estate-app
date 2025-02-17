@@ -20,6 +20,18 @@ import { useUser } from "@clerk/nextjs";
 import FileUpload from "../_components/FileUpload";
 import { Loader } from "lucide-react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
 function EditListing({ params }) {
   const { user } = useUser();
   const router = useRouter();
@@ -61,9 +73,11 @@ function EditListing({ params }) {
     if (data) {
       console.log(data);
       toast("Updating");
+      setLoading(false);
     }
 
     for (const image of images) {
+      setLoading(true);
       const file = image;
       const fileName = Date.now().toString();
       const fileExt = fileName.split(".").pop();
@@ -84,12 +98,28 @@ function EditListing({ params }) {
           .from("listingImages")
           .insert([{ url: imageUrl, listing_id: params?.id }])
           .select();
+        if (data) {
+          setLoading(false);
+        }
 
         if (error) {
           setLoading(false);
         }
       }
       setLoading(false);
+    }
+  };
+
+  const publishBtnHandler = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("listing")
+      .update({ active: true })
+      .eq("id", params?.id)
+      .select();
+    if (data) {
+      setLoading(false);
+      toast("Content published");
     }
   };
 
@@ -262,14 +292,43 @@ function EditListing({ params }) {
                 />
               </div>
               <div className="flex gap-7 justify-end mt-10">
-                <Button variant="ghost">Save</Button>
-                <Button disabled={loading}>
-                  {loading ? (
-                    <Loader className="animate-spin" />
-                  ) : (
-                    "Save & publish"
-                  )}
+                <Button type="button" variant="ghost" disabled={loading}>
+                  {loading ? <Loader className="animate-spin" /> : "Save"}
                 </Button>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button type="button" disabled={loading}>
+                      {loading ? (
+                        <Loader className="animate-spin" />
+                      ) : (
+                        "Save & publish"
+                      )}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Are you sure you want to publish this content?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Once published, this content will be available to all
+                        and cannot be modified. Ensure all inputs are finalized
+                        before proceeding.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => publishBtnHandler()}>
+                        {loading ? (
+                          <Loader className="animate-spin" />
+                        ) : (
+                          "Continue"
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
           </form>

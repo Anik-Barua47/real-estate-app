@@ -29,7 +29,7 @@ function Header() {
                 path == "/" && `text-[#1B3D5B]`
               }`}
             >
-              For Sale
+              For Sell
             </li>
           </Link>
           <li className="hover:text-[#1B3D5B] font-medium text-sm cursor-pointer">

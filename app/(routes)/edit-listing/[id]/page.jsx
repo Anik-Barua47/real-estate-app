@@ -17,25 +17,30 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabase/client";
 import { toast } from "sonner";
 import { useUser } from "@clerk/nextjs";
+import FileUpload from "../_components/FileUpload";
+import { Loader } from "lucide-react";
 
 function EditListing({ params }) {
   const { user } = useUser();
   const router = useRouter();
   const [listing, setlisting] = useState([]);
+  const [images, setImages] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    console.log(params.id);
+    // console.log(params.id);
     user && verifyUserRecord();
   }, [user]);
 
   const verifyUserRecord = async () => {
     const { data, error } = await supabase
       .from("listing")
-      .select("*")
+      .select("*,listingImages(listing_id,url)")
       .eq("createdBy", user?.primaryEmailAddress.emailAddress)
       .eq("id", params.id);
 
     if (data) {
+      console.log(data);
       setlisting(data[0]);
     }
 
@@ -43,8 +48,10 @@ function EditListing({ params }) {
       router.replace("/");
     }
   };
+  // console.log(listing?.type);
 
   const onSubmitHandler = async (formValue) => {
+    setLoading(true);
     const { data, error } = await supabase
       .from("listing")
       .update(formValue)
@@ -54,6 +61,35 @@ function EditListing({ params }) {
     if (data) {
       console.log(data);
       toast("Updating");
+    }
+
+    for (const image of images) {
+      const file = image;
+      const fileName = Date.now().toString();
+      const fileExt = fileName.split(".").pop();
+      const { data, error } = await supabase.storage
+        .from("listingImages")
+        .upload(`${fileName}`, file, {
+          contentType: `image/${fileExt}`,
+          upsert: false,
+        });
+
+      if (error) {
+        setLoading(false);
+        toast("Error while uploading images");
+      } else {
+        const imageUrl = process.env.NEXT_PUBLIC_IMAGE_URL + fileName;
+        console.log(imageUrl);
+        const { data, error } = await supabase
+          .from("listingImages")
+          .insert([{ url: imageUrl, listing_id: params?.id }])
+          .select();
+
+        if (error) {
+          setLoading(false);
+        }
+      }
+      setLoading(false);
     }
   };
 
@@ -70,7 +106,7 @@ function EditListing({ params }) {
           fullName: user?.fullName,
         }}
         onSubmit={(values) => {
-          console.log(values);
+          // console.log(values);
           onSubmitHandler(values);
         }}
       >
@@ -81,8 +117,10 @@ function EditListing({ params }) {
                 <div className="flex flex-col gap-2">
                   <h2 className="text-lg text-slate-500">Rent or Sell?</h2>
                   <RadioGroup
-                    defaultValue={listing?.type}
-                    onValueChange={(v) => (values.type = v)}
+                    value={values.type || listing?.type} // Use Formik's `values` or fallback to `listing?.type`
+                    onValueChange={(v) => {
+                      handleChange({ target: { name: "type", value: v } }); // Update Formik's state
+                    }}
                   >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="Rent" id="Rent" />
@@ -97,18 +135,15 @@ function EditListing({ params }) {
                 <div className="flex flex-col gap-2">
                   <h2 className="text-lg text-slate-500">Property Type</h2>
                   <Select
-                    onValueChange={(e) => (values.propertyType = e)}
-                    name="propertyType"
-                    defaultValue={listing?.propertyType}
+                    value={values.propertyType || listing?.propertyType} // Use Formik's `values` or fallback to `listing?.propertyType`
+                    onValueChange={(e) => {
+                      handleChange({
+                        target: { name: "propertyType", value: e },
+                      }); // Update Formik's state
+                    }}
                   >
                     <SelectTrigger className="w-[180px]">
-                      <SelectValue
-                        placeholder={
-                          listing?.propertyType
-                            ? listing?.propertyType
-                            : "Select Property Type"
-                        }
-                      />
+                      <SelectValue placeholder="Select Property Type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Single Family House">
@@ -217,9 +252,24 @@ function EditListing({ params }) {
                   />
                 </div>
               </div>
+              <div>
+                <h2 className="font-lg text-gray-500 my-3">
+                  Upload Property Images
+                </h2>
+                <FileUpload
+                  setImages={(value) => setImages(value)}
+                  imageList={listing.listingImages}
+                />
+              </div>
               <div className="flex gap-7 justify-end mt-10">
                 <Button variant="ghost">Save</Button>
-                <Button>Save & publish</Button>
+                <Button disabled={loading}>
+                  {loading ? (
+                    <Loader className="animate-spin" />
+                  ) : (
+                    "Save & publish"
+                  )}
+                </Button>
               </div>
             </div>
           </form>

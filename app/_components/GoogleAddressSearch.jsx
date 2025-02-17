@@ -8,9 +8,9 @@ function GoogleAddressSearch({ selectedAddress, setCoordinates }) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [existingAddresses, setExistingAddresses] = useState([]);
-  console.log(query);
-  console.log(suggestions);
-  console.log(existingAddresses);
+  // console.log(query);
+  // console.log(suggestions);
+  // console.log(existingAddresses);
 
   // Fetch existing addresses from the database
   useEffect(() => {

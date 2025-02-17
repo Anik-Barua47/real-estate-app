@@ -52,7 +52,7 @@ function EditListing({ params }) {
       .eq("id", params.id);
 
     if (data) {
-      console.log(data);
+      // console.log(data);
       setlisting(data[0]);
     }
 
@@ -62,50 +62,45 @@ function EditListing({ params }) {
   };
   // console.log(listing?.type);
 
-  const onSubmitHandler = async (formValue) => {
+  const onSubmitHandler = async (values) => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("listing")
-      .update(formValue)
-      .eq("id", params.id)
-      .select();
+    try {
+      const { data, error } = await supabase
+        .from("listing")
+        .update(values)
+        .eq("id", params.id)
+        .select();
 
-    if (data) {
-      console.log(data);
-      toast("Updating");
-      setLoading(false);
-    }
+      if (error) throw error;
 
-    for (const image of images) {
-      setLoading(true);
-      const file = image;
-      const fileName = Date.now().toString();
-      const fileExt = fileName.split(".").pop();
-      const { data, error } = await supabase.storage
-        .from("listingImages")
-        .upload(`${fileName}`, file, {
-          contentType: `image/${fileExt}`,
-          upsert: false,
-        });
+      for (const image of images) {
+        const fileName = `${Date.now()}-${image.name}`;
+        const fileExt = image.name.split(".").pop();
 
-      if (error) {
-        setLoading(false);
-        toast("Error while uploading images");
-      } else {
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("listingImages")
+          .upload(fileName, image, {
+            contentType: `image/${fileExt}`,
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
         const imageUrl = process.env.NEXT_PUBLIC_IMAGE_URL + fileName;
-        console.log(imageUrl);
-        const { data, error } = await supabase
+
+        const { data: imageData, error: imageError } = await supabase
           .from("listingImages")
           .insert([{ url: imageUrl, listing_id: params?.id }])
           .select();
-        if (data) {
-          setLoading(false);
-        }
 
-        if (error) {
-          setLoading(false);
-        }
+        if (imageError) throw imageError;
       }
+
+      toast("Listing updated successfully");
+    } catch (error) {
+      console.error(error);
+      toast("Error updating listing");
+    } finally {
       setLoading(false);
     }
   };
@@ -165,18 +160,17 @@ function EditListing({ params }) {
                 <div className="flex flex-col gap-2">
                   <h2 className="text-lg text-slate-500">Property Type</h2>
                   <Select
-                    value={values.propertyType || listing?.propertyType} // Use Formik's `values` or fallback to `listing?.propertyType`
-                    onValueChange={(e) => {
-                      handleChange({
-                        target: { name: "propertyType", value: e },
-                      }); // Update Formik's state
-                    }}
+                    value={values.propertyType || ""}
+                    onValueChange={(value) =>
+                      handleChange({ target: { name: "propertyType", value } })
+                    }
                   >
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger>
                       <SelectValue placeholder="Select Property Type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Single Family House">
+                      <SelectItem value=" Single Family House">
+                        {" "}
                         Single Family House
                       </SelectItem>
                       <SelectItem value="Town House">Town House</SelectItem>
@@ -292,7 +286,7 @@ function EditListing({ params }) {
                 />
               </div>
               <div className="flex gap-7 justify-end mt-10">
-                <Button type="button" variant="ghost" disabled={loading}>
+                <Button type="submit" disabled={loading}>
                   {loading ? <Loader className="animate-spin" /> : "Save"}
                 </Button>
 

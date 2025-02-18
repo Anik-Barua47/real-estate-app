@@ -1,7 +1,16 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Select,
   SelectContent,
@@ -12,7 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Formik } from "formik";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabase/client";
 import { toast } from "sonner";
@@ -32,302 +41,454 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+// Define the validation schema using Zod
+const formSchema = z.object({
+  type: z.enum(["rent", "sell"], { required_error: "Type is required" }),
+  propertyType: z.string({ required_error: "Property type is required" }),
+  bedroom: z.coerce.number().min(1, "Bedrooms must be at least 1"),
+  bathroom: z.coerce.number().min(1, "Bathrooms must be at least 1"),
+  builtIn: z.coerce.number().min(1800, "Built-in year must be valid"),
+  parking: z.coerce.number().min(0, "Parking must be valid"),
+  lotSize: z.coerce.number().min(0, "Lot size must be valid"),
+  area: z.coerce.number().min(1, "Area must be valid"),
+  price: z.coerce.number().min(1, "Selling price must be valid"),
+  hoa: z.coerce.number().min(0, "HOA must be valid"),
+  description: z.string().min(10, "Description must be at least 10 characters"),
+});
+
 function EditListing({ params }) {
   const { user } = useUser();
   const router = useRouter();
-  const [listing, setlisting] = useState([]);
+  const [listing, setListing] = useState(null);
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isSaved, setIsSaved] = useState(false); // Track if the listing is saved
+
+  // Initialize the form with react-hook-form and Zod validation
+  const form = useForm({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      type: "rent",
+      propertyType: "",
+      bedroom: 1,
+      bathroom: 1,
+      builtIn: 2000,
+      parking: 0,
+      lotSize: 0,
+      area: 1,
+      price: 1,
+      hoa: 0,
+      description: "",
+    },
+  });
 
   useEffect(() => {
-    // console.log(params.id);
-    user && verifyUserRecord();
+    if (user) {
+      verifyUserRecord();
+    }
   }, [user]);
 
   const verifyUserRecord = async () => {
-    const { data, error } = await supabase
-      .from("listing")
-      .select("*,listingImages(listing_id,url)")
-      .eq("createdBy", user?.primaryEmailAddress.emailAddress)
-      .eq("id", params.id);
-
-    if (data) {
-      // console.log(data);
-      setlisting(data[0]);
-    }
-
-    if (data?.length <= 0) {
-      router.replace("/");
-    }
-  };
-  // console.log(listing?.type);
-
-  const onSubmitHandler = async (values) => {
-    setLoading(true);
     try {
       const { data, error } = await supabase
         .from("listing")
-        .update(values)
+        .select("*, listingImages(listing_id, url)")
+        .eq("createdBy", user?.primaryEmailAddress.emailAddress)
+        .eq("id", params.id);
+
+      if (error) {
+        console.error(error);
+        toast.error("Error fetching listing details");
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        toast.error("Listing not found!");
+        router.push("/"); // Redirect to main page
+        return;
+      }
+
+      setListing(data[0]);
+      form.reset({
+        type: data[0].type || "rent",
+        propertyType: data[0].propertyType || "",
+        bedroom: data[0].bedroom || 1,
+        bathroom: data[0].bathroom || 1,
+        builtIn: data[0].builtIn || 2000,
+        parking: data[0].parking || 0,
+        lotSize: data[0].lotSize || 0,
+        area: data[0].area || 1,
+        price: data[0].price || 1,
+        hoa: data[0].hoa || 0,
+        description: data[0].description || "",
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error("An unexpected error occurred");
+    }
+  };
+
+  const onSubmitHandler = async (values, setActive) => {
+    if (
+      images.length === 0 &&
+      (!listing?.listingImages || listing?.listingImages.length === 0)
+    ) {
+      toast.warning("Please upload at least one image.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Add user information to the listing data
+      const listingData = {
+        ...values,
+        profileImage: user?.imageUrl,
+        fullName: user?.fullName,
+        active: setActive, // Set active based on the button clicked
+      };
+
+      // Update listing details in the database
+      const { data: updatedData, error: updateError } = await supabase
+        .from("listing")
+        .update(listingData)
         .eq("id", params.id)
         .select();
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
+      toast.success(
+        `Listing ${setActive ? "published" : "saved"} successfully`
+      );
+
+      // If "Save" button was clicked, enable the "Save & Publish" button
+      if (!setActive) {
+        setIsSaved(true);
+      }
+
+      // Upload images
       for (const image of images) {
-        const fileName = `${Date.now()}-${image.name}`;
-        const fileExt = image.name.split(".").pop();
-
+        const fileName = `${Date.now()}.${image.name.split(".").pop()}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("listingImages")
           .upload(fileName, image, {
-            contentType: `image/${fileExt}`,
+            contentType: `image/${fileName.split(".").pop()}`,
             upsert: false,
           });
 
         if (uploadError) throw uploadError;
 
-        const imageUrl = process.env.NEXT_PUBLIC_IMAGE_URL + fileName;
-
-        const { data: imageData, error: imageError } = await supabase
+        const imageUrl = `${process.env.NEXT_PUBLIC_IMAGE_URL}${fileName}`;
+        const { error: insertError } = await supabase
           .from("listingImages")
-          .insert([{ url: imageUrl, listing_id: params?.id }])
-          .select();
+          .insert([{ url: imageUrl, listing_id: params.id }]);
 
-        if (imageError) throw imageError;
+        if (insertError) throw insertError;
       }
 
-      toast("Listing updated successfully");
+      toast.success("Images uploaded successfully");
     } catch (error) {
       console.error(error);
-      toast("Error updating listing");
+      toast.error("An error occurred while updating the listing");
     } finally {
       setLoading(false);
     }
   };
 
-  const publishBtnHandler = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("listing")
-      .update({ active: true })
-      .eq("id", params?.id)
-      .select();
-    if (data) {
-      setLoading(false);
-      toast("Content published");
-    }
-  };
-
   return (
     <div className="px-10 md:px-36 my-10">
-      <h2 className="font-bold text-2xl">
-        Enter some more details about your listing
-      </h2>
-      <Formik
-        initialValues={{
-          type: "",
-          propertyType: "",
-          profileImage: user?.imageUrl,
-          fullName: user?.fullName,
-        }}
-        onSubmit={(values) => {
-          // console.log(values);
-          onSubmitHandler(values);
-        }}
-      >
-        {({ values, handleChange, handleSubmit }) => (
-          <form onSubmit={handleSubmit}>
-            <div className="p-8 rounded-lg shadow-md">
-              <div className="grid grid-cols-1 md:grid-cols-3">
-                <div className="flex flex-col gap-2">
-                  <h2 className="text-lg text-slate-500">Rent or Sell?</h2>
-                  <RadioGroup
-                    value={values.type || listing?.type} // Use Formik's `values` or fallback to `listing?.type`
-                    onValueChange={(v) => {
-                      handleChange({ target: { name: "type", value: v } }); // Update Formik's state
-                    }}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="Rent" id="Rent" />
-                      <Label htmlFor="Rent">Rent</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="Sell" id="Sell" />
-                      <Label htmlFor="Sell">Sell</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <h2 className="text-lg text-slate-500">Property Type</h2>
-                  <Select
-                    value={values.propertyType || ""}
-                    onValueChange={(value) =>
-                      handleChange({ target: { name: "propertyType", value } })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Property Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value=" Single Family House">
-                        {" "}
-                        Single Family House
-                      </SelectItem>
-                      <SelectItem value="Town House">Town House</SelectItem>
-                      <SelectItem value="Condo">Condo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mt-10">
-                <div className="flex gap-2 flex-col">
-                  <h2 className="text-gray-500">Bedroom</h2>
-                  <Input
-                    type="number"
-                    placeholder="Ex.2"
-                    name="bedroom"
-                    onChange={handleChange}
-                    defaultValue={listing?.bedroom}
-                  />
-                </div>
-                <div className="flex gap-2 flex-col">
-                  <h2 className="text-gray-500">Bathroom</h2>
-                  <Input
-                    type="number"
-                    placeholder="Ex.2"
-                    name="bathroom"
-                    onChange={handleChange}
-                    defaultValue={listing?.bathroom}
-                  />
-                </div>
-                <div className="flex gap-2 flex-col">
-                  <h2 className="text-gray-500">Built In</h2>
-                  <Input
-                    type="number"
-                    placeholder="Ex.1900 Sq.ft"
-                    name="builtIn"
-                    onChange={handleChange}
-                    defaultValue={listing?.builtIn}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mt-10">
-                <div className="flex gap-2 flex-col">
-                  <h2 className="text-gray-500">Parking</h2>
-                  <Input
-                    type="number"
-                    placeholder="Ex.2"
-                    name="parking"
-                    onChange={handleChange}
-                    defaultValue={listing?.parking}
-                  />
-                </div>
-                <div className="flex gap-2 flex-col">
-                  <h2 className="text-gray-500">Lot Size (Sq.Ft)</h2>
-                  <Input
-                    type="number"
-                    placeholder=""
-                    name="lotSize"
-                    onChange={handleChange}
-                    defaultValue={listing?.lotSize}
-                  />
-                </div>
-                <div className="flex gap-2 flex-col">
-                  <h2 className="text-gray-500">Area (Sq.Ft)</h2>
-                  <Input
-                    type="number"
-                    placeholder="Ex.1900"
-                    name="area"
-                    onChange={handleChange}
-                    defaultValue={listing?.area}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mt-10">
-                <div className="flex gap-2 flex-col">
-                  <h2 className="text-gray-500">Selling Price</h2>
-                  <Input
-                    type="number"
-                    placeholder="400000"
-                    name="price"
-                    onChange={handleChange}
-                    defaultValue={listing?.price}
-                  />
-                </div>
-                <div className="flex gap-2 flex-col">
-                  <h2 className="text-gray-500">HOA (Per Month) ($)</h2>
-                  <Input
-                    type="number"
-                    placeholder="100"
-                    name="hoa"
-                    onChange={handleChange}
-                    defaultValue={listing?.hoa}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-10 mt-10">
-                <div className="flex gap-2 flex-col">
-                  <h2 className="text-gray-500">Description</h2>
-                  <Textarea
-                    placeholder=""
-                    name="description"
-                    onChange={handleChange}
-                    defaultValue={listing?.description}
-                  />
-                </div>
-              </div>
-              <div>
-                <h2 className="font-lg text-gray-500 my-3">
-                  Upload Property Images
-                </h2>
-                <FileUpload
-                  setImages={(value) => setImages(value)}
-                  imageList={listing.listingImages}
-                />
-              </div>
-              <div className="flex gap-7 justify-end mt-10">
-                <Button type="submit" disabled={loading}>
-                  {loading ? <Loader className="animate-spin" /> : "Save"}
-                </Button>
+      <div className="flex justify-between">
+        <h2 className="font-bold text-2xl mb-2">
+          Enter some more details about your listing
+        </h2>
+        <div className="flex items-center gap-2">
+          <div>
+            <h2 className="text-lg font-bold">{user?.fullName}</h2>
+          </div>
+          {user?.imageUrl && (
+            <img
+              src={user.imageUrl}
+              alt="Profile"
+              className="w-8 h-8 rounded-full object-cover"
+            />
+          )}
+        </div>
+      </div>
+      {/* Display User Information */}
+      <div className="p-8 rounded-lg shadow-md">
+        <Form {...form}>
+          <form
+            className="space-y-4"
+            onSubmit={form.handleSubmit((values) =>
+              onSubmitHandler(values, false)
+            )}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-20">
+              {/* Rent or Sell */}
+              <FormField
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">Rent or Sell</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex space-x-4"
+                      >
+                        <FormItem className="flex items-center space-x-2">
+                          <FormControl>
+                            <RadioGroupItem
+                              value="rent"
+                              className="w-5 h-5 rounded-full border-2 border-gray-500 checked:bg-gray-800 checked:border-gray-800"
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal">Rent</FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-2">
+                          <FormControl>
+                            <RadioGroupItem
+                              value="sell"
+                              className="w-5 h-5 rounded-full border-2 border-gray-500 checked:bg-gray-800 checked:border-gray-800"
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal">Sell</FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button type="button" disabled={loading}>
-                      {loading ? (
-                        <Loader className="animate-spin" />
-                      ) : (
-                        "Save & publish"
-                      )}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        Are you sure you want to publish this content?
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Once published, this content will be available to all
-                        and cannot be modified. Ensure all inputs are finalized
-                        before proceeding.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => publishBtnHandler()}>
-                        {loading ? (
-                          <Loader className="animate-spin" />
-                        ) : (
-                          "Continue"
-                        )}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
+              {/* Property Type */}
+              <FormField
+                control={form.control}
+                name="propertyType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">Property Type</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select property type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="single family house">
+                          Single Family House
+                        </SelectItem>
+                        <SelectItem value="town house">Town House</SelectItem>
+                        <SelectItem value="condo">Condo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-20">
+              {/* Bedrooms */}
+              <FormField
+                control={form.control}
+                name="bedroom"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">Bedrooms</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Bathrooms */}
+              <FormField
+                control={form.control}
+                name="bathroom"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">Bathrooms</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Built In */}
+              <FormField
+                control={form.control}
+                name="builtIn"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">Built In</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-20">
+              {/* Parking */}
+              <FormField
+                control={form.control}
+                name="parking"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">Parking</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* Lot Size */}
+              <FormField
+                control={form.control}
+                name="lotSize"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">Lot Size (Sq.Ft)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Area */}
+              <FormField
+                control={form.control}
+                name="area"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">Area (Sq.Ft)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-20">
+              {/* Selling Price */}
+              <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">Selling Price</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* HOA */}
+              <FormField
+                control={form.control}
+                name="hoa"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg">
+                      HOA (Per Month) ($)
+                    </FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            {/* Description */}
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-lg">Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Image Upload */}
+            <div>
+              <FormLabel className="text-lg">Upload Property Images</FormLabel>
+              <FileUpload
+                onChange={(value) => setImages(value)}
+                imageList={listing?.listingImages}
+              />
+            </div>
+            <div className="flex justify-end gap-10">
+              {/* Save Button */}
+              <Button type="submit" disabled={loading}>
+                {loading ? (
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}{" "}
+                Save
+              </Button>
+
+              {/* Save & Publish Button */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button disabled={!isSaved || loading}>
+                    {loading ? (
+                      <Loader className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}{" "}
+                    Publish
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      Are you sure you want to publish this content?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Once published, this content will be available to all and
+                      cannot be modified. Ensure all inputs are finalized before
+                      proceeding.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      type="button"
+                      onClick={() =>
+                        form.handleSubmit((values) =>
+                          onSubmitHandler(values, true)
+                        )()
+                      }
+                    >
+                      Continue
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </form>
-        )}
-      </Formik>
+        </Form>
+      </div>
     </div>
   );
 }

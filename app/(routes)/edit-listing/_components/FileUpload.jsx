@@ -1,20 +1,25 @@
 import Image from "next/image";
 import React, { useState } from "react";
 
-function FileUpload({ setImages, imageList }) {
+function FileUpload({ onChange, imageList }) {
   const [imagePreview, setImagePreview] = useState([]);
 
   const handleFileUpload = (e) => {
     const files = e.target.files;
-    setImages(files);
+
+    // Call the onChange prop to update the parent state
+    if (onChange) {
+      onChange(files);
+    }
+
+    // Generate previews for the selected images
     const previews = Array.from(files).map((file) => URL.createObjectURL(file));
-    // console.log(previews);
     setImagePreview(previews);
   };
 
   return (
     <div>
-      <div className="flex items-center justify-center w-full">
+      <div className="flex items-center justify-center w-full mt-2">
         <label
           htmlFor="dropzone-file"
           className="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600"
@@ -53,6 +58,8 @@ function FileUpload({ setImages, imageList }) {
           />
         </label>
       </div>
+
+      {/* Display image previews */}
       <div className="grid grid-cols-2 sm:grid-cols-10 mt-3 gap-3">
         {imagePreview.map((image, index) => (
           <div key={index} className="">
@@ -61,10 +68,13 @@ function FileUpload({ setImages, imageList }) {
               width={100}
               height={100}
               className="rounded-lg object-cover h-[100px] w-[100px]"
+              alt="Preview"
             />
           </div>
         ))}
       </div>
+
+      {/* Display existing images */}
       {imageList && (
         <div className="grid grid-cols-2 sm:grid-cols-10 mt-3 gap-3">
           {imageList.map((image, index) => (
@@ -74,6 +84,7 @@ function FileUpload({ setImages, imageList }) {
                 width={100}
                 height={100}
                 className="rounded-lg object-cover h-[100px] w-[100px]"
+                alt="Existing Image"
               />
             </div>
           ))}

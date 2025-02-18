@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <main>
       <div className="px-10">
-        <ListingMapView />
+        <ListingMapView type="sell" />
       </div>
     </main>
   );

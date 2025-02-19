@@ -58,7 +58,7 @@ function ListingMapView({ type }) {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
       <div>
         <Listing
           listing={listing}

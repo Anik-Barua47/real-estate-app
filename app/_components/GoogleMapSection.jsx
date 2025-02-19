@@ -10,7 +10,7 @@ const MapComponent = dynamic(() => import("./MapComponent"), {
 
 const GoogleMapSection = ({ listing }) => {
   return (
-    <div className="md:h-full md:w-full">
+    <div className="w-[900px] h-[800px] sticky top-28 right-4 bg-white rounded-lg shadow-lg overflow-hidden p-4 max-w-full transition-all duration-300">
       <MapComponent listing={listing} />
     </div>
   );

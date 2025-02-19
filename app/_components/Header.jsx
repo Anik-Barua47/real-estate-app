@@ -17,10 +17,17 @@ function Header() {
   }, []);
 
   return (
-    <div className="flex justify-between p-6 px-10 shadow-sm fixed top-0 w-full z-10 bg-white">
+    <div className="flex justify-between p-6 px-10 shadow-sm fixed top-0 w-full z-50 bg-white">
       <div className="flex gap-12 items-center">
         <Link href={"/"}>
-          <Image src={"/logo.svg"} width={150} height={150} />
+          <Image
+            alt="Logo"
+            src="/logo.svg"
+            width={150}
+            height={150}
+            priority
+            className="h-auto"
+          />
         </Link>
         <ul className="hidden flex gap-10">
           <Link href={"/"}>

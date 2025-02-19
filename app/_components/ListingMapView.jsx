@@ -12,7 +12,6 @@ function ListingMapView({ type }) {
   const [bathCount, setBathCount] = useState(0);
   const [parkingCount, setParkingCount] = useState(0);
   const [houseType, setHouseType] = useState("all");
-
   useEffect(() => {
     getLatestListing();
   }, [bedCount, bathCount, parkingCount, houseType, searchedAddress]);
@@ -71,7 +70,7 @@ function ListingMapView({ type }) {
           setHouseType={setHouseType}
         />
       </div>
-      <div className="fixed right-10 h-[800px] w-[900px]">
+      <div className="static 2xl:fixed right-10 md:h-[800px] md:w-[900px]">
         <GoogleMapSection listing={listing} />
       </div>
     </div>

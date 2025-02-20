@@ -142,3 +142,7 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+.cl-cardBox {
+  width: 100%;
+}
